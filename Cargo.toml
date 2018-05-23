@@ -1,0 +1,11 @@
+[package]
+name = "arp-scanner"
+version = "0.1.0"
+authors = ["Gavyn Riebau <gavyn.riebau@gmail.com>"]
+
+[dependencies]
+pnet_datalink = "0.21.0"
+ipnetwork = "0.12.0"
+
+[dependencies.pnet]
+version = "0.21.0"
