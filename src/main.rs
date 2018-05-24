@@ -23,6 +23,17 @@ use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
 use pnet::packet::{Packet, MutablePacket};
 use pnet::packet::arp::{ArpHardwareTypes, ArpOperations, ArpOperation, ArpPacket};
 
+const BANNER : &str = r#"  ____  ____   ____        _____   __   ____  ____   ____     ___  ____  
+ /    ||    \ |    \      / ___/  /  ] /    ||    \ |    \   /  _]|    \ 
+|  o  ||  D  )|  o  )    (   \_  /  / |  o  ||  _  ||  _  | /  [_ |  D  )
+|     ||    / |   _/      \__  |/  /  |     ||  |  ||  |  ||    _]|    / 
+|  _  ||    \ |  |        /  \ /   \_ |  _  ||  |  ||  |  ||   [_ |    \ 
+|  |  ||  .  \|  |        \    \     ||  |  ||  |  ||  |  ||     ||  .  \
+|__|__||__|\_||__|         \___|\____||__|__||__|__||__|__||_____||__|\_|
+
+by Gavyn Riebau
+"#;
+
 fn send_arp_packet(
     interface: NetworkInterface,
     source_ip: Ipv4Addr,
@@ -91,15 +102,15 @@ fn recv_arp_packets(interface: NetworkInterface, tx: Sender<(Ipv4Addr, MacAddr)>
 }
 
 fn main() {
+	
+	println!("{}", BANNER);
 
     let args : Vec<String> = env::args().collect();
 
     if args.len() != 2 || args[1] == "-h" {
-        println!("Usage: arp-scanner <interface>");
+        println!("Usage: arp-scanner <interface>\n");
         std::process::exit(0);
     }
-
-    println!("Starting...\n");
 
     let interface_name = &args[1];
     let interface_names_match = |iface: &NetworkInterface| &iface.name == interface_name;
