@@ -2,23 +2,26 @@
 extern crate pnet;
 extern crate ipnetwork;
 
+#[macro_use]
+extern crate prettytable;
+
+use prettytable::Table;
+use prettytable::format;
+
 use std::env;
-use std::fmt;
-use std::net::{IpAddr, Ipv4Addr, AddrParseError};
+use std::time::Duration;
+use std::thread;
+use std::sync::mpsc::{self, Sender, Receiver};
+use std::net::{IpAddr, Ipv4Addr};
 
 use ipnetwork::{IpNetwork};
-use pnet::datalink::{self, Channel, NetworkInterface, MacAddr, ParseMacAddrErr};
+use pnet::datalink::{self, Channel, NetworkInterface, MacAddr};
 
 use pnet::packet::ethernet::MutableEthernetPacket;
 use pnet::packet::arp::MutableArpPacket;
 use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
 use pnet::packet::{Packet, MutablePacket};
 use pnet::packet::arp::{ArpHardwareTypes, ArpOperations, ArpOperation, ArpPacket};
-
-
-fn print_arp_packet(packet: &ArpPacket) {
-    println!("[{}]\t\t{}", packet.get_sender_proto_addr(), packet.get_sender_hw_addr());
-}
 
 fn send_arp_packet(
     interface: NetworkInterface,
@@ -59,32 +62,34 @@ fn send_arp_packet(
     tx.send_to(ethernet_packet.packet(), Some(interface));
 }
 
-fn recv_arp_packets(interface: NetworkInterface) {
+fn recv_arp_packets(interface: NetworkInterface, tx: Sender<(Ipv4Addr, MacAddr)>) {
 
-    let (_, mut rx) = match datalink::channel(&interface, Default::default()) {
-        Ok(Channel::Ethernet(tx, rx)) => (tx, rx),
-        Ok(_) => panic!("Unknown channel type"),
-        Err(e) => panic!("Error happened {}", e)
-    };
+    thread::spawn(move || {
+        let (_, mut rx) = match datalink::channel(&interface, Default::default()) {
+            Ok(Channel::Ethernet(tx, rx)) => (tx, rx),
+            Ok(_) => panic!("Unknown channel type"),
+            Err(e) => panic!("Error happened {}", e)
+        };
 
-    loop {
-        match rx.next() {
-            Ok(data) => {
-                let ethernet_packet = EthernetPacket::new(data).unwrap();
-                let ethernet_payload = ethernet_packet.payload();
-                let arp_packet = ArpPacket::new(ethernet_payload).unwrap();
-                let arp_reply_op = ArpOperation::new(2_u16);
+        loop {
+            match rx.next() {
+                Ok(data) => {
+                    let ethernet_packet = EthernetPacket::new(data).unwrap();
+                    let ethernet_payload = ethernet_packet.payload();
+                    let arp_packet = ArpPacket::new(ethernet_payload).unwrap();
+                    let arp_reply_op = ArpOperation::new(2_u16);
 
-                if arp_packet.get_operation() == arp_reply_op {
-                    print_arp_packet(&arp_packet);
-                }
-                //println!("Received packet: {:?}", packet);
-            },
-            Err(e) => panic!("An error occurred while reading packet: {}", e)
+                    if arp_packet.get_operation() == arp_reply_op {
+                        let result: (Ipv4Addr, MacAddr) = (arp_packet.get_sender_proto_addr(), arp_packet.get_sender_hw_addr());
+                        tx.send(result).unwrap();
+                    }
+                },
+                Err(e) => panic!("An error occurred while reading packet: {}", e)
+            }
         }
-    }
-}
+    });
 
+}
 
 fn main() {
     println!("Starting...\n");
@@ -104,7 +109,12 @@ fn main() {
     let arp_operation = ArpOperations::Request;
     let target_mac = MacAddr::new(255,255,255,255,255,255);
 
-    println!("Sending ARP requests");
+    // Channel for ARP replies.
+    let (tx, rx): (Sender<(Ipv4Addr, MacAddr)>, Receiver<(Ipv4Addr, MacAddr)>) = mpsc::channel();
+
+    recv_arp_packets(interface.clone(), tx);
+
+    println!("[X] Sending ARP requests...");
     match source_network {
         &IpNetwork::V4(source_networkv4) => {
             for target_ipv4 in source_networkv4.iter() {
@@ -119,7 +129,23 @@ fn main() {
         },
         _ => {}
     }
+    println!("[X] Collecting results...");
+    thread::sleep(Duration::from_secs(2));
+    println!();
 
-    println!("Receiving ARP responses");
-    recv_arp_packets(interface.clone());
+    let mut table = Table::new();
+    table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
+    table.set_titles(row!["host", "mac"]);
+
+    loop {
+        match rx.try_recv() {
+            Ok((ipv4_addr, mac_addr)) => {
+                table.add_row(row![ipv4_addr, mac_addr]);
+            },
+            Err(_) => break
+        }
+    }
+
+    table.printstd();
 }
+
