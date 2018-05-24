@@ -3,6 +3,7 @@ extern crate pnet;
 extern crate ipnetwork;
 
 use std::env;
+use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, AddrParseError};
 
 use ipnetwork::{IpNetwork};
@@ -10,9 +11,14 @@ use pnet::datalink::{self, Channel, NetworkInterface, MacAddr, ParseMacAddrErr};
 
 use pnet::packet::ethernet::MutableEthernetPacket;
 use pnet::packet::arp::MutableArpPacket;
-use pnet::packet::ethernet::EtherTypes;
+use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
 use pnet::packet::{Packet, MutablePacket};
-use pnet::packet::arp::{ArpHardwareTypes, ArpOperations, ArpOperation};
+use pnet::packet::arp::{ArpHardwareTypes, ArpOperations, ArpOperation, ArpPacket};
+
+
+fn print_arp_packet(packet: &ArpPacket) {
+    println!("[{}]\t\t{}", packet.get_sender_proto_addr(), packet.get_sender_hw_addr());
+}
 
 fn send_arp_packet(
     interface: NetworkInterface,
@@ -22,7 +28,7 @@ fn send_arp_packet(
     target_mac: MacAddr,
     arp_operation: ArpOperation) {
 
-    let(mut tx, _) = match datalink::channel(&interface, Default::default()) {
+    let (mut tx, _) = match datalink::channel(&interface, Default::default()) {
         Ok(Channel::Ethernet(tx, rx)) => (tx, rx),
         Ok(_) => panic!("Unknown channel type"),
         Err(e) => panic!("Error happened {}", e),
@@ -53,23 +59,44 @@ fn send_arp_packet(
     tx.send_to(ethernet_packet.packet(), Some(interface));
 }
 
+fn recv_arp_packets(interface: NetworkInterface) {
+
+    let (_, mut rx) = match datalink::channel(&interface, Default::default()) {
+        Ok(Channel::Ethernet(tx, rx)) => (tx, rx),
+        Ok(_) => panic!("Unknown channel type"),
+        Err(e) => panic!("Error happened {}", e)
+    };
+
+    loop {
+        match rx.next() {
+            Ok(data) => {
+                let ethernet_packet = EthernetPacket::new(data).unwrap();
+                let ethernet_payload = ethernet_packet.payload();
+                let arp_packet = ArpPacket::new(ethernet_payload).unwrap();
+                let arp_reply_op = ArpOperation::new(2_u16);
+
+                if arp_packet.get_operation() == arp_reply_op {
+                    print_arp_packet(&arp_packet);
+                }
+                //println!("Received packet: {:?}", packet);
+            },
+            Err(e) => panic!("An error occurred while reading packet: {}", e)
+        }
+    }
+}
+
 
 fn main() {
-    println!("Starting...");
-    let interface_name = env::args().nth(1).unwrap();
-    println!("Interface name is {}", interface_name);
-    let interface_names_match = |iface: &NetworkInterface| iface.name == interface_name;
+    println!("Starting...\n");
 
-    // Find the network interface with the provided name
+    let interface_name = env::args().nth(1).unwrap();
+    let interface_names_match = |iface: &NetworkInterface| iface.name == interface_name;
     let interfaces = datalink::interfaces();
     let interface = interfaces.into_iter()
         .filter(interface_names_match)
         .next()
         .unwrap();
-
-    println!("Interface: {}", interface);
-
-    let interface_clone = interface.clone();
+    println!("Using interface: {}\n", interface);
 
     let source_mac = interface.mac_address();
     let source_network = interface.ips.first().unwrap();
@@ -77,12 +104,13 @@ fn main() {
     let arp_operation = ArpOperations::Request;
     let target_mac = MacAddr::new(255,255,255,255,255,255);
 
+    println!("Sending ARP requests");
     match source_network {
         &IpNetwork::V4(source_networkv4) => {
             for target_ipv4 in source_networkv4.iter() {
                 match source_ip {
                     IpAddr::V4(source_ipv4) => {
-                        send_arp_packet(interface_clone.clone(), source_ipv4, source_mac, target_ipv4, target_mac, arp_operation);
+                        send_arp_packet(interface.clone(), source_ipv4, source_mac, target_ipv4, target_mac, arp_operation);
                     },
                     _ => {}
                 }
@@ -92,5 +120,6 @@ fn main() {
         _ => {}
     }
 
-
+    println!("Receiving ARP responses");
+    recv_arp_packets(interface.clone());
 }
