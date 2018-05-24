@@ -88,14 +88,21 @@ fn recv_arp_packets(interface: NetworkInterface, tx: Sender<(Ipv4Addr, MacAddr)>
             }
         }
     });
-
 }
 
 fn main() {
+
+    let args : Vec<String> = env::args().collect();
+
+    if args.len() != 2 || args[1] == "-h" {
+        println!("Usage: arp-scanner <interface>");
+        std::process::exit(0);
+    }
+
     println!("Starting...\n");
 
-    let interface_name = env::args().nth(1).unwrap();
-    let interface_names_match = |iface: &NetworkInterface| iface.name == interface_name;
+    let interface_name = &args[1];
+    let interface_names_match = |iface: &NetworkInterface| &iface.name == interface_name;
     let interfaces = datalink::interfaces();
     let interface = interfaces.into_iter()
         .filter(interface_names_match)
