@@ -1,14 +1,16 @@
 
 extern crate pnet;
 extern crate ipnetwork;
+extern crate clap;
 
 #[macro_use]
 extern crate prettytable;
 
+use clap::{Arg, App};
+
 use prettytable::Table;
 use prettytable::format;
 
-use std::env;
 use std::time::Duration;
 use std::thread;
 use std::sync::mpsc::{self, Sender, Receiver};
@@ -31,7 +33,6 @@ const BANNER : &str = r#"  ____  ____   ____        _____   __   ____  ____   __
 |  |  ||  .  \|  |        \    \     ||  |  ||  |  ||  |  ||     ||  .  \
 |__|__||__|\_||__|         \___|\____||__|__||__|__||__|__||_____||__|\_|
 
-by Gavyn Riebau
 "#;
 
 fn send_arp_packet(
@@ -102,17 +103,37 @@ fn recv_arp_packets(interface: NetworkInterface, tx: Sender<(Ipv4Addr, MacAddr)>
 }
 
 fn main() {
-	
+
+	let matches = App::new(BANNER)
+		.author("Gavyn Riebau <gavyn.riebau@gmail.com>")
+		.about("\nRuns an ARP scan to discover all hosts in the network")
+		.arg(Arg::with_name("interface")
+			.short("i")
+			.long("interface")
+			.value_name("INTERFACE")
+			.help("The interface on which the scan will be performed")
+			.required_unless("list")
+		)
+		.arg(Arg::with_name("list")
+			.short("l")
+			.long("list")
+			.help("List available interfaces")
+			.conflicts_with("interface")
+		)
+		.get_matches();
+
 	println!("{}", BANNER);
 
-    let args : Vec<String> = env::args().collect();
+	if matches.is_present("list") {
+		println!("Listing interfaces:\n");
+		let interfaces = datalink::interfaces();
+		for interface in interfaces.iter() {
+			println!("{}\n", interface);
+		}
+		std::process::exit(0);
+	}
 
-    if args.len() != 2 || args[1] == "-h" {
-        println!("Usage: arp-scanner <interface>\n");
-        std::process::exit(0);
-    }
-
-    let interface_name = &args[1];
+    let interface_name = matches.value_of("interface").unwrap();
     let interface_names_match = |iface: &NetworkInterface| &iface.name == interface_name;
     let interfaces = datalink::interfaces();
     let interface = interfaces.into_iter()
