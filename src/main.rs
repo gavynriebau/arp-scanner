@@ -112,12 +112,21 @@ fn main() {
 			.long("interface")
 			.value_name("INTERFACE")
 			.help("The interface on which the scan will be performed")
-			.required_unless("list")
+			.required_unless_one(&["list", "interface_index"])
+			.conflicts_with("interface_index")
+		)
+		.arg(Arg::with_name("interface_index")
+			.short("x")
+			.long("index")
+			.value_name("INTERFACE_INDEX")
+			.help("The index of the interface rather than the interface name.")
+			.required_unless_one(&["list", "interface"])
+			.conflicts_with("interface")
 		)
 		.arg(Arg::with_name("list")
 			.short("l")
 			.long("list")
-			.help("List available interfaces")
+			.help("List available interfaces including their index")
 			.conflicts_with("interface")
 		)
 		.get_matches();
@@ -133,13 +142,33 @@ fn main() {
 		std::process::exit(0);
 	}
 
-    let interface_name = matches.value_of("interface").unwrap();
-    let interface_names_match = |iface: &NetworkInterface| &iface.name == interface_name;
+    let interface_match = |iface: &NetworkInterface| {
+		if matches.is_present("interface") {
+			return &iface.name == matches.value_of("interface").unwrap();
+		} else {
+			let index_str = matches.value_of("interface_index").unwrap();
+			let index : u32 = index_str.parse().unwrap();
+
+			return iface.index == index;
+		}
+	};
+
     let interfaces = datalink::interfaces();
     let interface = interfaces.into_iter()
-        .filter(interface_names_match)
+        .filter(interface_match)
         .next()
         .unwrap();
+
+	if interface.is_loopback() {
+		println!("Aborting because chosen interface is a loopback interface.\nChoose a non-loopback interface.\n");
+		std::process::exit(1);
+	}
+
+	if interface.ips.is_empty() {
+		println!("Aborting because chosen interface doesn't have a network address.\n");
+		std::process::exit(1);
+	}
+
     println!("Using interface: {}\n", interface);
 
     let source_mac = interface.mac_address();
@@ -185,7 +214,7 @@ fn main() {
         }
     }
 
-	if tables.len() > 0 {
+	if table.len() > 0 {
 		table.printstd();
 	} else {
 		println!("No hosts found...");
