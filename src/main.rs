@@ -185,6 +185,11 @@ fn main() {
         }
     }
 
-    table.printstd();
+	if tables.len() > 0 {
+		table.printstd();
+	} else {
+		println!("No hosts found...");
+	}
+
 }
 
