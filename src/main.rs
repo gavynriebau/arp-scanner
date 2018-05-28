@@ -46,7 +46,7 @@ fn send_arp_packet(
     let (mut tx, _) = match datalink::channel(&interface, Default::default()) {
         Ok(Channel::Ethernet(tx, rx)) => (tx, rx),
         Ok(_) => panic!("Unknown channel type"),
-        Err(e) => panic!("Error happened {}", e),
+        Err(e) => panic!("Error happened {}", e)
     };
 
     let mut ethernet_buffer = [0u8; 42];
@@ -183,6 +183,7 @@ fn main() {
     recv_arp_packets(interface.clone(), tx);
 
     println!("[X] Sending ARP requests...");
+
     match source_network {
         &IpNetwork::V4(source_networkv4) => {
             for target_ipv4 in source_networkv4.iter() {
@@ -190,12 +191,12 @@ fn main() {
                     IpAddr::V4(source_ipv4) => {
                         send_arp_packet(interface.clone(), source_ipv4, source_mac, target_ipv4, target_mac, arp_operation);
                     },
-                    _ => {}
+                    e => panic!("Error while parsing to IPv4 address: {}", e)
                 }
 
             }
         },
-        _ => {}
+        e => panic!("Error while attempting to get network for interface: {}", e)
     }
     println!("[X] Collecting results...");
     thread::sleep(Duration::from_secs(2));
