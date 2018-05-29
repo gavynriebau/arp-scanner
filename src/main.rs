@@ -6,13 +6,15 @@ extern crate clap;
 #[macro_use]
 extern crate prettytable;
 
-use clap::{Arg, App};
+use clap::{Arg, App, ArgMatches};
 
 use prettytable::Table;
 use prettytable::format;
 
 use std::time::Duration;
 use std::thread;
+use std::fs::File;
+use std::io::Write;
 use std::sync::mpsc::{self, Sender, Receiver};
 use std::net::{IpAddr, Ipv4Addr};
 
@@ -25,7 +27,8 @@ use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
 use pnet::packet::{Packet, MutablePacket};
 use pnet::packet::arp::{ArpHardwareTypes, ArpOperations, ArpOperation, ArpPacket};
 
-const BANNER : &str = r#"  ____  ____   ____        _____   __   ____  ____   ____     ___  ____  
+const BANNER : &str = r#"
+  ____  ____   ____        _____   __   ____  ____   ____     ___  ____  
  /    ||    \ |    \      / ___/  /  ] /    ||    \ |    \   /  _]|    \ 
 |  o  ||  D  )|  o  )    (   \_  /  / |  o  ||  _  ||  _  | /  [_ |  D  )
 |     ||    / |   _/      \__  |/  /  |     ||  |  ||  |  ||    _]|    / 
@@ -129,6 +132,12 @@ fn main() {
 			.help("List available interfaces including their index")
 			.conflicts_with("interface")
 		)
+        .arg(Arg::with_name("output")
+             .short("o")
+             .long("out")
+             .value_name("FILE")
+             .help("Write results to a file")
+         )
 		.get_matches();
 
 	println!("{}", BANNER);
@@ -217,9 +226,24 @@ fn main() {
 
 	if table.len() > 0 {
 		table.printstd();
+
+        if matches.is_present("output") {
+            let out_file = get_out_file(&matches);
+            let _ = table.to_csv(out_file).expect("Failed to write results to CSV.");
+        }
+
 	} else {
 		println!("No hosts found...");
+
+        if matches.is_present("output") {
+            let mut out_file = get_out_file(&matches);
+            let _ = out_file.write_all(b"No hosts found...").unwrap();
+        }
 	}
 
+}
+
+fn get_out_file(matches: &ArgMatches) -> File {
+    File::create(matches.value_of("output").unwrap()).expect("Failed to open out file.")
 }
 
