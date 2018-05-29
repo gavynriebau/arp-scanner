@@ -26,15 +26,17 @@ Gavyn Riebau <gavyn.riebau@gmail.com>
 Runs an ARP scan to discover all hosts in the network
 
 USAGE:
-    arp-scanner [FLAGS] --interface <INTERFACE> --index <INTERFACE_INDEX>
+    arp-scanner [FLAGS] [OPTIONS] --interface <INTERFACE> --index <INTERFACE_INDEX>
+
 FLAGS:
     -h, --help       Prints help information
     -l, --list       List available interfaces including their index
     -V, --version    Prints version information
+
 OPTIONS:
     -i, --interface <INTERFACE>      The interface on which the scan will be performed
     -x, --index <INTERFACE_INDEX>    The index of the interface rather than the interface name.
-
+    -o, --out <FILE>                 Write results to a file in CSV format
 ```
 
 ### List interfaces:

@@ -136,7 +136,7 @@ fn main() {
              .short("o")
              .long("out")
              .value_name("FILE")
-             .help("Write results to a file")
+             .help("Write results to a file in CSV format")
          )
 		.get_matches();
 
