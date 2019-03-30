@@ -181,7 +181,7 @@ fn main() {
     println!("Using interface: {}\n", interface);
 
     let source_mac = interface.mac_address();
-    let source_network = interface.ips.first().unwrap();
+    let source_network = interface.ips.iter().find(|x| x.is_ipv4()).unwrap();
     let source_ip = source_network.ip();
     let arp_operation = ArpOperations::Request;
     let target_mac = MacAddr::new(255,255,255,255,255,255);
